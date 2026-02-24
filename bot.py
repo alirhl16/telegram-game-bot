@@ -1,5 +1,6 @@
 import logging
 import random
+import os
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import (
@@ -13,16 +14,20 @@ from telegram.ext import (
 
 logging.basicConfig(level=logging.INFO)
 
-TOKEN = "توکن_ربات_تو_اینجا"  # جایگزین کن
-BOT_USERNAME = "YourBotUsername"  # بدون @
+# =========================
+# تنظیمات ربات
+# =========================
+TOKEN = os.environ.get("TOKEN")  # توکن ربات از ENV
+BOT_USERNAME = os.environ.get("BOT_USERNAME")  # یوزرنیم ربات از ENV
 
-app_flask = Flask(__name__)
 bot = Bot(token=TOKEN)
+app_flask = Flask(__name__)
 
+# =========================
+# داده‌های بازی
+# =========================
 scenarios = ["😂 وقتی شارژت تموم شد", "😹 وقتی با گوشی دستشویی میری!"]
 matchmaking_queue = []
-
-# داده‌های بازی در رم ذخیره میشن
 bot_data_store = {}
 
 def generate_game_code():
@@ -67,13 +72,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🎉 بازی اختصاصی ساخته شد! شما سازنده هستید.\nکد بازی: {code}\nبازیکنان دیگر می‌توانند با این کد وارد شوند.",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-
     elif query.data == "public_game":
         if (user, chat_id) not in matchmaking_queue:
             matchmaking_queue.append((user, chat_id))
         await query.edit_message_text("⏳ شما وارد صف بازی عمومی شدید. منتظر بازیکنان دیگر باشید...")
         await try_start_public_game()
-
     elif query.data.startswith("start_"):
         code = query.data.split("_")[1]
         game = bot_data_store[code]
@@ -82,7 +85,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for p, cid in game["players"].items():
                 await bot.send_message(chat_id=cid, text="▶️ بازی شروع شد!")
             await start_round(code)
-
     elif query.data.startswith("vote_"):
         data = query.data.split("_")
         code = data[1]
@@ -101,7 +103,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_round(code):
     game = bot_data_store[code]
     game["round"] += 1
-
     if game["round"] > 20:
         scores_text = "📊 جدول امتیازات نهایی:\n"
         for p, score in game["scores"].items():
@@ -118,7 +119,6 @@ async def start_round(code):
     game["responses"] = {}
     game["message_map"] = {}
     scenario = random.choice(scenarios)
-
     for p, cid in game["players"].items():
         if p == judge:
             await bot.send_message(
@@ -144,7 +144,6 @@ async def handle_code_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             game["players"][user] = chat_id
             game["scores"][user] = 0
             await update.message.reply_text(f"✅ {user} با موفقیت به بازی {text} اضافه شد!")
-            # نوتیف به سازنده
             creator_name = list(game["players"].keys())[0]
             creator_chat_id = game["players"][creator_name]
             if creator_chat_id != chat_id:
@@ -171,7 +170,6 @@ async def handle_meme(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await bot.send_sticker(chat_id=cid, sticker=message.sticker.file_id)
                     elif message.animation:
                         await bot.send_animation(chat_id=cid, animation=message.animation.file_id)
-                # برای داور دکمه انتخاب برنده
                 keyboard = [[InlineKeyboardButton("🏆 انتخاب برنده", callback_data=f"vote_{code}_{message.message_id}")]]
                 await bot.send_message(
                     chat_id=game["players"][judge],
@@ -217,5 +215,9 @@ def webhook():
 def index():
     return "Bot is running"
 
+# =========================
+# اجرای Web Service روی Render
+# =========================
 if __name__ == "__main__":
-    app_flask.run(port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app_flask.run(host="0.0.0.0", port=port)
