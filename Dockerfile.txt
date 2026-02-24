@@ -1,0 +1,18 @@
+# پایه: Python 3.11
+FROM python:3.11-slim
+
+# مسیر کاری داخل کانتینر
+WORKDIR /app
+
+# کپی کردن فایل های پروژه
+COPY . /app
+
+# نصب وابستگی ها
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
+
+# پورت پیش فرض
+EXPOSE 5000
+
+# فرمان اجرای وب سرویس
+CMD ["python", "bot.py"]
